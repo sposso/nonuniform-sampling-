@@ -37,7 +37,7 @@ def second_stage(model):
         params_to_update_second.append(param)
         print("\t",name)
 
-    second_optimizer = optim.Adam(params_to_update_second, lr = 1e-5, weight_decay=0.001)
+    second_optimizer = optim.Adam(params_to_update_second, lr = 1e-5, weight_decay=1e-3)
     
     return second_optimizer
 

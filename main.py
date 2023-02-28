@@ -22,7 +22,7 @@ def parse_args():
     parser.add_argument('--aug', default = False, action="store_true")
     parser.add_argument('--batch_size', '-b',default=10, type = int, help = "mini-batch size per worker(GPU)" )
     parser.add_argument('--workers', '-w', default= 8, type = int, help ="Number of data loading workers")
-    parser.add_argument('--warp', default = False, action="store_true")
+    parser.add_argument('--warp', default = True, action="store_true")
     parser.add_argument('--res', '-r', default=1, type= int, help='choose wanted resolution from list')
     parser.add_argument('--sigma', '-S', default= 14, type = int, help ="Sigma value of the Gaussian Kernel")
     #parser.add_argument("--checkpoint-file",default=os.getcwd()+"/tmp/checkpoint.pth.tar",type=str,help="checkpoint file path, to load and save to")
@@ -33,16 +33,85 @@ def parse_args():
 
 
 
+def train_model(model, dataloaders, criterion,optimizer,patch_classifier,warp,res, sigma):
+    
+    # Each epoch has a training and validation phase
+    for phase in ['train', 'val']:
+        if phase == 'train':
+            model.train()  # Set model to training mode
+        else:
+            model.eval()   # Set model to evaluate mode
+
+        running_loss = 0.0
+        running_corrects = 0
+
+        # Iterate over data.
+        for img_tensor,labels in dataloaders[phase]:
+    
+            if warp:
+                heatmaps = prob_heatmap_tensor(img_tensor,patch_classifier)
+                sampled_imgs = warped_imgs(img_tensor,heatmaps,res,sigma)
+
+                inputs= sampled_imgs.expand(-1,3,*sampled_imgs.shape[2:])
+                #inputs = inputs.to(device = device, dtype = torch.float)
+                
+            else :
+                inputs=img_tensor.expand(-1,3,*img_tensor.shape[2:])
+                #inputs = inputs.to(device = device, dtype = torch.float)
+
+            # zero the parameter gradients
+            optimizer.zero_grad()
+
+            # forward
+            # track history if only in train
+            with torch.set_grad_enabled(phase == 'train'):
+                # Get model outputs and calculate loss
+                # Special case for inception because in training it has an auxiliary output. In train
+                #   mode we calculate the loss by summing the final output and the auxiliary output
+                #   but in testing we only consider the final output
+
+
+                outputs = model(inputs)
+                loss = criterion(outputs, labels)
+
+                _, preds = torch.max(outputs, 1)
+
+                # backward + optimize only if in training phase
+                if phase == 'train':
+                    loss.backward()
+                    optimizer.step()
+
+            # statistics
+            running_loss += loss.item() * inputs.size(0)
+            running_corrects += torch.sum(preds == labels.data)
+
+        epoch_loss = running_loss / len(dataloaders[phase].dataset)
+        epoch_acc = running_corrects.double() / len(dataloaders[phase].dataset)
+
+        print('Phase: {} Loss: {:.4f} Acc: {:.4f}'.format(phase, epoch_loss, epoch_acc))
+        
+        if phase == 'val':
+            
+            val_acc = epoch_acc
+
+
+        print()
+    
+    return val_acc
+
+
+
 def main():
 
    
     args = parse_args() 
     res = [(288,224),(576,448),(864,672),(1152,896)][args.res]
+    
     #Initilialize data  
     split_dataset(args.data_localization)
 
     #Initilalize patch classifier
-    patch_classifier = initialize_patch_model("resnet", num_classes=5,use_pretrained = True, root = args.project_root)
+    patch_classifier = initialize_patch_model("resnet", num_classes=5,use_pretrained = True, root = args.project_root, useLightning=True)
     
     # Initilaize whole image classifier and loss_function (CrossEntropyLoss)
     model, criterion = initialize_whole_model(args.project_root)
@@ -88,79 +157,6 @@ def main():
     time_elapsed = time.time() - since
     print('Training complete in {:.0f}m {:.0f}s'.format(time_elapsed // 60, time_elapsed % 60))
     #print('Best val Acc: {:4f}'.format(state.best_acc1))
-
-
-
-def train_model(model, dataloaders, criterion,optimizer,patch_classifier,warp,res, sigma):
-    
-    # Each epoch has a training and validation phase
-    for phase in ['train', 'val']:
-        if phase == 'train':
-            model.train()  # Set model to training mode
-        else:
-            model.eval()   # Set model to evaluate mode
-
-        running_loss = 0.0
-        running_corrects = 0
-
-        # Iterate over data.
-        for img_tensor,labels in dataloaders[phase]:
-    
-            if warp == True:
-                heatmaps = prob_heatmap_tensor(img_tensor,patch_classifier)
-                print(heatmaps.shape)
-                sampled_imgs = warped_imgs(img_tensor,heatmaps,res,sigma)
-
-                inputs= sampled_imgs.expand(-1,3,*sampled_imgs.shape[2:])
-                #inputs = inputs.to(device = device, dtype = torch.float)
-                
-            else :
-                inputs=img_tensor.expand(-1,3,*img_tensor.shape[2:])
-                #inputs = inputs.to(device = device, dtype = torch.float)
-
-            #Convert 1-channel images into 3-channel images
-            inputs= img_tensor.expand(-1,3,*img_tensor.shape[2:])
-            
-
-            # zero the parameter gradients
-            optimizer.zero_grad()
-
-            # forward
-            # track history if only in train
-            with torch.set_grad_enabled(phase == 'train'):
-                # Get model outputs and calculate loss
-                # Special case for inception because in training it has an auxiliary output. In train
-                #   mode we calculate the loss by summing the final output and the auxiliary output
-                #   but in testing we only consider the final output
-
-
-                outputs = model(inputs)
-                loss = criterion(outputs, labels)
-
-                _, preds = torch.max(outputs, 1)
-
-                # backward + optimize only if in training phase
-                if phase == 'train':
-                    loss.backward()
-                    optimizer.step()
-
-            # statistics
-            running_loss += loss.item() * inputs.size(0)
-            running_corrects += torch.sum(preds == labels.data)
-
-        epoch_loss = running_loss / len(dataloaders[phase].dataset)
-        epoch_acc = running_corrects.double() / len(dataloaders[phase].dataset)
-
-        print('Phase: {} Loss: {:.4f} Acc: {:.4f}'.format(phase, epoch_loss, epoch_acc))
-        
-        if phase == 'val':
-            
-            val_acc = epoch_acc
-
-
-        print()
-    
-    return val_acc
 
 
 

@@ -3,6 +3,7 @@ import torch
 from torch import nn
 from torchvision import models
 import pytorch_lightning as pl
+import torch.distributed as dist
 
 class Bottleneck(nn.Module):
     expansion = 2
@@ -73,12 +74,16 @@ def _make_layer(inplanes, block, planes, blocks, stride=1):
 
     return model
 
-def initialize_patch_model(model_name, num_classes,use_pretrained = False, root = None):
+def initialize_patch_model(model_name, num_classes,use_pretrained = False, root = None, useLightning=False):
     # Initialize these variables which will be set in this if statement. Each of these
     #   variables is model specific.
+    
+    
+    if useLightning:
+        backbone = initialize_patch_model(model_name, num_classes, use_pretrained, root, False)
+        return PL_model(backbone)
+
     model_ft = None
-
-
     if model_name == "resnet":
         """ Resnet50
         """
@@ -130,9 +135,16 @@ class Resnet50(nn.Module):
 
 class PL_model(pl.LightningModule):
     def __init__(self, backbone):
-        super().__init()
+        super().__init__()
         
         self.backbone = backbone
         
     def forward(self, x):
         return self.backbone(x)
+
+
+
+    def predict_step(self, batch, batch_idx):
+        preds = self.forward(batch)
+        return preds.reshape(-1, preds.shape[-1])
+
