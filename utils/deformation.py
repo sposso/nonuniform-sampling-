@@ -8,7 +8,7 @@ from torch.utils.data import  DataLoader
 
 
 def prob_heatmap_tensor(img_tensor, patch_classifier,mean_=0.2939,std_=0.2694,
-                        batch_size=32,patch_size=224, stride=8, padding = 111):
+                        batch_size=16,patch_size=224, stride=32, padding = 111):
     '''Sweep image data with a trained model to produce prob heatmaps
     '''
     nb_row = round(float(img_tensor.shape[2])/stride )

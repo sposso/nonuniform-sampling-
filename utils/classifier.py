@@ -119,9 +119,11 @@ class FullClassifier(pl.LightningModule):
         super().__init__()
 
         self.patch_classifier = initialize_patch_model("resnet", num_classes=5,use_pretrained = True, root = args.project_root)
+        self.patch_classifier.requires_grad = False
+
         self.backbone = initialize_whole_model(args.project_root)
         self.res = res
-        self.sig = args.sigma
+        self.sigma = args.sigma
         self.criterion = nn.CrossEntropyLoss()
         
     def forward(self, x):
@@ -129,17 +131,17 @@ class FullClassifier(pl.LightningModule):
  
     def training_step(self, batch, batch_idx):
         x, y = batch
-        print('herea')
+        
         heatmaps = prob_heatmap_tensor(x, self.patch_classifier)
         sampled_imgs = warped_imgs(x,heatmaps, self.res, self.sigma)
 
         inputs= sampled_imgs.expand(-1,3,*sampled_imgs.shape[2:])
         inputs= sampled_imgs.expand(-1,3,*sampled_imgs.shape[2:])
-        print('hereb')
+        
         # compute loss
         preds = self.backbone(inputs)
         loss = self.criterion(preds, y)
-        print('herec')
+        
         self.log('train_loss', loss)
         return loss
 

@@ -15,8 +15,8 @@ def parse_args():
     parser.add_argument('--project_root', default= os.getcwd(), type = str)
     parser.add_argument('--data_localization',default ='/home/sposso22/work/final_data/loc.csv',type=str, help= 'data paths')
     parser.add_argument('--aug', default = False, action="store_true")
-    parser.add_argument('--batch_size', '-b',default=10, type = int, help = "mini-batch size per worker(GPU)" )
-    parser.add_argument('--workers', '-w', default= 8, type = int, help ="Number of data loading workers")
+    parser.add_argument('--batch_size', '-b',default=8, type = int, help = "mini-batch size per worker(GPU)" )
+    parser.add_argument('--workers', '-w', default= 4, type = int, help ="Number of data loading workers")
     parser.add_argument('--warp', default = True, action="store_true")
     parser.add_argument('--res', '-r', default=1, type= int, help='choose wanted resolution from list')
     parser.add_argument('--sigma', '-S', default= 14, type = int, help ="Sigma value of the Gaussian Kernel")
@@ -28,6 +28,7 @@ def parse_args():
     parser.add_argument('--logs-folder', type=str, default="logs")
     parser.add_argument('--experiment_name', type=str, default="classifier")
     parser.add_argument('--seed', type=int, default=1)
+    parser.add_argument('--nodes', type=int, default=1)
 
     return parser.parse_args()
 
@@ -39,7 +40,7 @@ def bookkeeping(args):
     #torch.set_float32_matmul_precision('high')
 
 def main():
-    args = parse_args() 
+    args = parse_args()
     bookkeeping(args)
 
     res = [(288,224),(576,448),(864,672),(1152,896)][args.res]
