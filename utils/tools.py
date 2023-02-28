@@ -4,7 +4,6 @@ from torch.utils.data import Dataset
 import torchvision.transforms as T
 import pandas as pd
 import numpy as np
-from torch import nn
 from PIL import Image
 import cv2
 import random

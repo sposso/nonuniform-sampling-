@@ -5,32 +5,12 @@ from torch import nn
 import torch.nn.functional as F
 import torchvision.transforms as T
 from torch.utils.data import  DataLoader
-import pytorch_lightning as pl
-from utils.classifier import PL_model
-import time
-import sys, os
-import torch.distributed as dist
 
 
-class HiddenPrints:
-    def __enter__(self):
-        self._original_stdout = sys.stdout
-        self._original_stderr = sys.stderr
-        sys.stdout = open(os.devnull, 'w')
-        sys.stderr = open(os.devnull, 'w')
-    def __exit__(self, exc_type, exc_val, exc_tb):
-        sys.stdout.close()
-        sys.stdout = self._original_stdout
-        sys.stderr.close()
-        sys.stderr = self._original_stderr
-
-def prob_heatmap_tensor(img_tensor, patch_classifier, mean_=0.2939,std_=0.2694,
-                        batch_size=256,patch_size=224, stride=8, padding = 111):
+def prob_heatmap_tensor(img_tensor, patch_classifier,mean_=0.2939,std_=0.2694,
+                        batch_size=32,patch_size=224, stride=8, padding = 111):
     '''Sweep image data with a trained model to produce prob heatmaps
     '''
-    timeStart = time.time()
-    print('Entering prob_heatmap_tensor')
-
     nb_row = round(float(img_tensor.shape[2])/stride )
     nb_col = round(float(img_tensor.shape[3])/stride )
     nb_row = int(nb_row)
@@ -38,12 +18,6 @@ def prob_heatmap_tensor(img_tensor, patch_classifier, mean_=0.2939,std_=0.2694,
    
     heatmap_list = []
     unfold = torch.nn.Unfold(kernel_size=(patch_size,patch_size), dilation=1, padding= padding, stride=stride)
-    normalizing_transform = T.Normalize(mean=[mean_,mean_,mean_],std=[std_,std_,std_])
-
-    num_gpus = 2
-    trainer = pl.Trainer(devices=num_gpus, accelerator='gpu', strategy='ddp_find_unused_parameters_false',
-                        enable_progress_bar=False, )
-
     for img in img_tensor:
         img = img.unsqueeze(dim=0)
         img_= unfold(img)
@@ -53,50 +27,33 @@ def prob_heatmap_tensor(img_tensor, patch_classifier, mean_=0.2939,std_=0.2694,
         img_ = img_.view(c,1,224,224)
         patch_X = img_.expand(-1,3,-1,-1)
 
-
         patch_classifier.eval()
         with torch.no_grad():
-            patch_X = normalizing_transform(patch_X.clone().detach())
-            loader = DataLoader(patch_X, batch_size, num_workers=16)
-
-            # commence prediction
-            # with HiddenPrints():
-            preds = trainer.predict(
-                patch_classifier,
-                loader
-            )
+            patch_X = torch.tensor(patch_X,dtype = torch.float32)
+            transform = T.Normalize(mean=[mean_,mean_,mean_],std=[std_,std_,std_])
+            patch_X = transform(patch_X.clone())
+            loader = DataLoader(patch_X, batch_size)
+            preds =[]
             
-            preds = torch.vstack(preds).cuda()
+            for i in loader:
+                #i = i #.to(device)
+                chunk_preds = patch_classifier(i)
+                chunk_preds = nn.functional.softmax(chunk_preds, dim=1)  
+                preds.append(chunk_preds)
 
-            all_preds = [torch.zeros_like(preds, device=preds.device) for _ in range(dist.get_world_size())]
-            dist.all_gather(all_preds, preds)
-
-            trainer.strategy.barrier()
-
-            if dist.get_rank() == 0:
-                # need to interleave due to default distributed sampler
-                interleaved_out = torch.empty((preds.shape[0]*dist.get_world_size(), preds.shape[1]), device=preds.device, dtype=preds.dtype)
-                for current_rank in range(dist.get_world_size()):
-                    interleaved_out[current_rank::dist.get_world_size()] = all_preds[current_rank]
-                interleaved_preds = interleaved_out[:patch_X.shape[0]]
-
-                preds = F.softmax(interleaved_preds, dim=1)
-                pred = preds[:,1:5].sum(axis=1)
-
-                heatmap = pred.reshape((nb_row, nb_col))
-
-                heatmap_list.append(heatmap.unsqueeze(dim=0))
-
-            trainer.strategy.barrier() 
+          
+            pred = torch.vstack(preds)
         
-    
-    dist.destroy_process_group()
+            pred = pred[:,1:5].sum(axis=1)
+        
 
-    heatmap_tensor = torch.cat(heatmap_list)
-
-    print('exiting prob heatmap tensor with time=%.2f' % (time.time() - timeStart))
+            heatmap = pred.reshape((nb_row, nb_col))
+            
+            heatmap_list.append(heatmap.unsqueeze(dim=0))
+        
+        heatmap_tensor = torch.cat(heatmap_list)
+            
     return heatmap_tensor.cpu().detach()
-
 
 
 

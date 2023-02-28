@@ -7,41 +7,6 @@ from utils.tools import CBIS_MAMMOGRAM,MyIntensityShift
 from  torch import  nn
 from torch import optim
 
-from utils.classifier import Bottleneck, Resnet50
-
-
-#Two training stages 
-def first_stage(model):
-    
-    print("Params to update in the first stage ")
-    params_to_update_first = []
-    for name, param in model.named_parameters():
-        if name.startswith('layer') or name.startswith("fc"):
-            param.requires_grad = True
-            params_to_update_first.append(param)
-            print("\t",name)
-        else:
-            param.requires_grad = False
-    first_optimizer = optim.Adam(params_to_update_first, lr = 1e-4, weight_decay=1e-4)
-    
-    return first_optimizer
-
-def second_stage(model):
-
-
-    print("Params to update in the second stage")
-    params_to_update_second = []
-    for name, param in model.named_parameters():
-
-        param.requires_grad = True
-        params_to_update_second.append(param)
-        print("\t",name)
-
-    second_optimizer = optim.Adam(params_to_update_second, lr = 1e-5, weight_decay=1e-3)
-    
-    return second_optimizer
-
-
 
 def initialize_data_loader(batch_size,workers,root,aug = False) -> Tuple[DataLoader, DataLoader, DataLoader]:
 
@@ -89,11 +54,3 @@ def initialize_data_loader(batch_size,workers,root,aug = False) -> Tuple[DataLoa
 
 
     return train_loader,val_loader,test_loader
-
-def initialize_whole_model(root):
-    
-    model = Resnet50(Bottleneck, layers=[2,2], use_pretrained=True, root=root)
-
-    criterion = nn.CrossEntropyLoss()
-    
-    return model, criterion
