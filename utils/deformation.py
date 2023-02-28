@@ -29,7 +29,7 @@ def prob_heatmap_tensor(img_tensor, patch_classifier,mean_=0.2939,std_=0.2694,
 
         patch_classifier.eval()
         with torch.no_grad():
-            patch_X = torch.tensor(patch_X,dtype = torch.float32)
+            patch_X = patch_X.clone().detach().requires_grad_(False)
             transform = T.Normalize(mean=[mean_,mean_,mean_],std=[std_,std_,std_])
             patch_X = transform(patch_X.clone())
             loader = DataLoader(patch_X, batch_size)
@@ -148,7 +148,9 @@ def warped_imgs(img,heat,res,fwhm):
     grid = nn.Upsample(size=res, mode='bilinear')(grid)
     grid = torch.transpose(grid,1,2)
     grid = torch.transpose(grid,2,3)
-    #img = img.to(device=device)
+    
+    grid = grid.cuda()
+
     x_sampled = F.grid_sample(img, grid, align_corners = False)
 
     #img.detach()

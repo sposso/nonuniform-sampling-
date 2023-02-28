@@ -85,7 +85,7 @@ def pil_loader(path: str) :
 
 class CBIS_MAMMOGRAM(Dataset):
     def __init__(self, csv_file, transform=None):
-
+        print(csv_file)
         self.annotations = pd.read_csv(csv_file)
         self.transform = transform
 

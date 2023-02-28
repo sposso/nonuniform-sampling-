@@ -3,4 +3,5 @@ python3 main.py \
     --logs-folder "$PROJECT/lsa273_uksr/breastcancer/runs/logs" \
     --data_localization "$PROJECT/lsa273_uksr/breastcancer/data/final_data/loc.csv" \
     --devices 4 \
-    --nodes $SLURM_JOB_NUM_NODES
+    --nodes $SLURM_JOB_NUM_NODES \
+    --epochs 30

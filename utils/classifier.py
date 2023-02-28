@@ -6,6 +6,7 @@ import pytorch_lightning as pl
 import torch.distributed as dist
 from utils.deformation import prob_heatmap_tensor, warped_imgs
 import numpy as np
+from torchmetrics import Accuracy
 
 class Bottleneck(nn.Module):
     expansion = 2
@@ -94,7 +95,7 @@ def initialize_patch_model(model_name, num_classes,use_pretrained = False, root 
     return model_ft
 
 class Resnet50(nn.Module):
-    def __init__(self,block,layers,use_pretrained,root, stride =1, inplanes = 2048, num_classes= 2):
+    def __init__(self,block,layers,use_pretrained,root, stride =1, inplanes = 2048, num_classes= 1):
         super(Resnet50, self).__init__()
         self.model = initialize_patch_model("resnet", 5, use_pretrained,root)
         self.model = nn.Sequential(*list(self.model.children())[:-2])
@@ -104,6 +105,7 @@ class Resnet50(nn.Module):
         self.avgpool = nn.AdaptiveAvgPool2d((1,1))
         #self.avgpool = nn.AvgPool2d(7, stride=1)
         self.fc = nn.Linear(512*block.expansion,num_classes)
+        self.sigmoid = nn.Sigmoid()
 
     def forward(self, x):
         x = self.model(x)
@@ -112,6 +114,7 @@ class Resnet50(nn.Module):
         x = self.avgpool(x)
         x = x.view(x.size(0), -1)
         x = self.fc(x)
+        x = self.sigmoid(x)
         return x
 
 class FullClassifier(pl.LightningModule):
@@ -122,16 +125,22 @@ class FullClassifier(pl.LightningModule):
         self.patch_classifier.requires_grad = False
 
         self.backbone = initialize_whole_model(args.project_root)
+        self.backbone.requires_grad = True
+
         self.res = res
         self.sigma = args.sigma
-        self.criterion = nn.CrossEntropyLoss()
-        
+        self.criterion = nn.BCELoss()
+
+        self.accuracy_metric = Accuracy(task='binary')
+        self.max_accuracy = 0
+ 
     def forward(self, x):
         return self.backbone(x)
  
     def training_step(self, batch, batch_idx):
-        x, y = batch
-        
+        x, y = batch 
+        y = y.to(torch.float)
+
         heatmaps = prob_heatmap_tensor(x, self.patch_classifier)
         sampled_imgs = warped_imgs(x,heatmaps, self.res, self.sigma)
 
@@ -139,7 +148,7 @@ class FullClassifier(pl.LightningModule):
         inputs= sampled_imgs.expand(-1,3,*sampled_imgs.shape[2:])
         
         # compute loss
-        preds = self.backbone(inputs)
+        preds = self.backbone(inputs).squeeze()
         loss = self.criterion(preds, y)
         
         self.log('train_loss', loss)
@@ -148,6 +157,7 @@ class FullClassifier(pl.LightningModule):
 
     def validation_step(self, batch, batch_idx): 
         x, y = batch 
+        y = y.to(torch.float)
 
         heatmaps = prob_heatmap_tensor(x, self.patch_classifier)
         sampled_imgs = warped_imgs(x,heatmaps, self.res, self.sigma)
@@ -155,9 +165,11 @@ class FullClassifier(pl.LightningModule):
         inputs= sampled_imgs.expand(-1,3,*sampled_imgs.shape[2:])
         inputs= sampled_imgs.expand(-1,3,*sampled_imgs.shape[2:])
 
-        preds = self.forward(inputs) 
+        # compute loss
+        preds = self.forward(inputs).squeeze() 
         loss = self.criterion(preds, y)
-
+        
+        # compute accuracy
         acc =  self.accuracy_metric(preds, y)
         self.log('accuracy', acc, on_epoch=True, prog_bar=True, sync_dist=True)
 
@@ -197,13 +209,16 @@ class FullClassifier(pl.LightningModule):
             optim_stage2.zero_grad()
 
     def configure_optimizers(self):
+        # completely turn off patch classifier grads
+        for name, param in self.patch_classifier.named_parameters():
+            param.requires_grad = False
+
         # turn off layer/fc when making first optimizer
         params_to_update_first = []
         for name, param in self.backbone.named_parameters():
             if name.startswith('layer') or name.startswith("fc"):
                 param.requires_grad = True
                 params_to_update_first.append(param)
-                print("\t",name)
             else:
                 param.requires_grad = False
 
@@ -212,14 +227,9 @@ class FullClassifier(pl.LightningModule):
 
         # renable all grads to make second optimizer
         for name, param in self.backbone.named_parameters():
-            param.requires_grad = False
+            param.requires_grad = True
 
         optim_stage2 = torch.optim.Adam(self.backbone.parameters(), lr=1e-4, amsgrad=True)
         scheduler_stage2 = torch.optim.lr_scheduler.CosineAnnealingLR(optim_stage2, T_max=20)
-
-        return [optim_stage1, optim_stage2], [scheduler_stage1, scheduler_stage2]
-
-    def predict_step(self, batch, batch_idx):
-        preds = self.forward(batch)
-        return preds.reshape(-1, preds.shape[-1])
-
+        return [optim_stage1], [scheduler_stage1]
+        #return [optim_stage1, optim_stage2], [scheduler_stage1, scheduler_stage2]
