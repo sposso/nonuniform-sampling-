@@ -56,14 +56,14 @@ def main():
 
     # create checkpoint callback. configured to save models with best KNN accuracy
     checkpoint_callback = ModelCheckpoint(dirpath=args.model_checkpoint_folder + args.experiment_name, save_on_train_epoch_end=True,
-            save_top_k=2, monitor="accuracy", filename='{epoch}-{train_loss_ssl:.2f}-{kNN_accuracy:.2f}',
+            save_top_k=2, monitor="accuracy", filename='{epoch}-{train_loss:.2f}-{accuracy:.2f}',
             every_n_epochs=1, mode='max')
 
     # create pytorch lightning trainer
     # configured to use gpu and distributed data parallel (ddp)
     trainer = pl.Trainer.from_argparse_args(args, accelerator='gpu', log_every_n_steps=10, max_epochs=args.epochs,
                                             logger=tb_logger, callbacks=[checkpoint_callback], 
-                                            strategy='ddp_find_unused_parameters_false', replace_sampler_ddp  =False)
+                                            strategy='ddp', replace_sampler_ddp  =False)
 
     trainer.fit(
         model,
