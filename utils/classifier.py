@@ -7,7 +7,7 @@ import torch.distributed as dist
 from utils.deformation import prob_heatmap_tensor, warped_imgs
 import numpy as np
 from torchmetrics import Accuracy
-
+from pytorch_lightning.callbacks import BaseFinetuning
 class Bottleneck(nn.Module):
     expansion = 2
 
@@ -171,6 +171,7 @@ class FullClassifier(pl.LightningModule):
         
         # compute accuracy
         acc =  self.accuracy_metric(preds, y)
+        self.log('validation_loss', loss, on_epoch=True, sync_dist=True)
         self.log('accuracy', acc, on_epoch=True, prog_bar=True, sync_dist=True)
 
         return acc.item()
@@ -188,48 +189,29 @@ class FullClassifier(pl.LightningModule):
             # needed for checkpointing
             self.log('accuracy', 0., prog_bar=True, sync_dist=True)
             
-    def optimizer_steps(self,
-                        epoch=None,
-                        batch_idx=None,
-                        optimizer=None,
-                        optimizer_idx=None,
-                        optimizer_closure=None,
-                        on_tpu=None,
-                        using_native_amp=None,
-                        using_lbfgs=None):
-        
-        optim_stage1, optim_stage2 = self.optimizes()
-
-        # update params
-        if (epoch < 30):
-            optim_stage1.step()
-            optim_stage1.zero_grad()
-        else:
-            optim_stage2.step()
-            optim_stage2.zero_grad()
-
     def configure_optimizers(self):
-        # completely turn off patch classifier grads
-        for name, param in self.patch_classifier.named_parameters():
-            param.requires_grad = False
+        optim = torch.optim.Adam(filter(lambda p: p.requires_grad, self.parameters()), lr=1e-4, amsgrad=True)
+        scheduler = torch.optim.lr_scheduler.CosineAnnealingLR(optim, T_max=100)
+        
+        return [optim], [scheduler]
 
-        # turn off layer/fc when making first optimizer
-        params_to_update_first = []
-        for name, param in self.backbone.named_parameters():
+class FeatureExtractorFreezeUnfreeze(BaseFinetuning):
+    def __init__(self, unfreeze_at_epoch=30):
+        super().__init__()
+        self._unfreeze_at_epoch = unfreeze_at_epoch
+
+    def freeze_before_training(self, pl_module):
+        for name, param in pl_module.backbone.named_parameters():
             if name.startswith('layer') or name.startswith("fc"):
                 param.requires_grad = True
-                params_to_update_first.append(param)
             else:
                 param.requires_grad = False
 
-        optim_stage1 = torch.optim.Adam(params_to_update_first, lr=1e-4, amsgrad=True)
-        scheduler_stage1 = torch.optim.lr_scheduler.CosineAnnealingLR(optim_stage1, T_max=30)
-
-        # renable all grads to make second optimizer
-        for name, param in self.backbone.named_parameters():
-            param.requires_grad = True
-
-        optim_stage2 = torch.optim.Adam(self.backbone.parameters(), lr=1e-4, amsgrad=True)
-        scheduler_stage2 = torch.optim.lr_scheduler.CosineAnnealingLR(optim_stage2, T_max=20)
-        return [optim_stage1], [scheduler_stage1]
-        #return [optim_stage1, optim_stage2], [scheduler_stage1, scheduler_stage2]
+    def finetune_function(self, pl_module, current_epoch, optimizer, optimizer_idx):
+        # When `current_epoch` is 10, feature_extractor will start training.
+        if current_epoch == self._unfreeze_at_epoch:
+            self.unfreeze_and_add_param_group(
+                modules=pl_module.backbone,
+                optimizer=optimizer,
+                train_bn=True,
+        )

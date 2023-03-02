@@ -5,5 +5,4 @@ python3 main.py \
     --logs-folder "$PROJECT/lsa273_uksr/breastcancer/runs/logs" \
     --devices 4 \
     --nodes $SLURM_JOB_NUM_NODES \
-    --epochs 30 \
-    --batch_size 8
+    --epochs 50

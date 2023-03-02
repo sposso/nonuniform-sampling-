@@ -3,7 +3,7 @@ import argparse
 import os
 #from sklearn.metrics import roc_curve
 #from sklearn.metrics import roc_auc_score
-from utils.classifier import FullClassifier
+from utils.classifier import FullClassifier, FeatureExtractorFreezeUnfreeze
 from utils.train_util import initialize_data_loader
 from data.split import split_dataset
 from pytorch_lightning import loggers as pl_loggers
@@ -60,10 +60,13 @@ def main():
             save_top_k=2, monitor="accuracy", filename='{epoch}-{train_loss:.2f}-{accuracy:.2f}',
             every_n_epochs=1, mode='max')
 
+    # backbone finetuning callback
+    finetuning_callback = FeatureExtractorFreezeUnfreeze(unfreeze_at_epoch=30)
+
     # create pytorch lightning trainer
     # configured to use gpu and distributed data parallel (ddp)
     trainer = pl.Trainer.from_argparse_args(args, accelerator='gpu', log_every_n_steps=10, max_epochs=args.epochs,
-                                            logger=tb_logger, callbacks=[checkpoint_callback], 
+                                            logger=tb_logger, callbacks=[checkpoint_callback, finetuning_callback], 
                                             strategy='ddp', replace_sampler_ddp  =False)
 
     trainer.fit(
