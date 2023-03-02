@@ -13,7 +13,7 @@ import pytorch_lightning as pl
 def parse_args():
     parser = argparse.ArgumentParser(description='train, resume, test arguments')
     parser.add_argument('--project_root', default= os.getcwd(), type = str)
-    parser.add_argument('--data_localization',default ='/home/sposso22/work/final_data/loc.csv',type=str, help= 'data paths')
+    parser.add_argument('--data_localization',default="/project/lsa273_uksr/breastcancer/data/final_data/loc.csv",type=str, help= 'data paths')
     parser.add_argument('--aug', default = False, action="store_true")
     parser.add_argument('--batch_size', '-b',default=8, type = int, help = "mini-batch size per worker(GPU)" )
     parser.add_argument('--workers', '-w', default= 4, type = int, help ="Number of data loading workers")
@@ -45,7 +45,8 @@ def main():
 
     res = [(288,224),(576,448),(864,672),(1152,896)][args.res]
     
-    #Initilialize data  
+    #Initilialize data
+    print(args.data_localization)  
     split_dataset(args.data_localization)
     train_loader,val_loader, test_loader = initialize_data_loader(args.batch_size,args.workers,args.project_root,args.aug)
 
@@ -55,7 +56,7 @@ def main():
     tb_logger = pl_loggers.TensorBoardLogger(save_dir=args.logs_folder, name=args.experiment_name)
 
     # create checkpoint callback. configured to save models with best KNN accuracy
-    checkpoint_callback = ModelCheckpoint(dirpath=args.model_checkpoint_folder + args.experiment_name, save_on_train_epoch_end=True,
+    checkpoint_callback = ModelCheckpoint(dirpath=args.model_checkpoint_folder+args.experiment_name, save_on_train_epoch_end=True,
             save_top_k=2, monitor="accuracy", filename='{epoch}-{train_loss:.2f}-{accuracy:.2f}',
             every_n_epochs=1, mode='max')
 
