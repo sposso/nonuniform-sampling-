@@ -4,4 +4,4 @@ python3 main.py \
     --data_localization "$PROJECT/lsa273_uksr/breastcancer/data/final_data/loc.csv" \
     --devices 4 \
     --nodes $SLURM_JOB_NUM_NODES \
-    --epochs 30
+    --epochs 50
