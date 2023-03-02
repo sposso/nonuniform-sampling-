@@ -1,5 +1,8 @@
 *.pyc
+*~
+*.swp
 */__pycache__
 __pycache__
 logs/*
 lightning_logs/*
+.ipynb_checkpoints
