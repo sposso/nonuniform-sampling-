@@ -10,12 +10,14 @@ from pytorch_lightning import loggers as pl_loggers
 from pytorch_lightning.callbacks import ModelCheckpoint
 import pytorch_lightning as pl
 import wandb
+import warnings
+warnings.filterwarnings("ignore", category=UserWarning)
 
 def parse_args():
     parser = argparse.ArgumentParser(description='train, resume, test arguments')
     parser.add_argument('--project_root', default= os.getcwd(), type = str)
     parser.add_argument('--data_localization',default="/home/sposso22/work/new_data/masks/complete_data/locations.csv",type=str, help= 'data paths')
-    parser.add_argument('--aug', default = False, action="store_true")
+    parser.add_argument('--aug', type=str, default=None, choices=[None, "BIG","MEDIUM","SMALL"])
     parser.add_argument('--batch_size', '-b',default=8, type = int, help = "mini-batch size per worker(GPU)" )
     parser.add_argument('--workers', '-w', default= 4, type = int, help ="Number of data loading workers")
     parser.add_argument('--warp', default = True, action="store_true")

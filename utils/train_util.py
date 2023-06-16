@@ -8,7 +8,7 @@ from  torch import  nn
 from torch import optim
 
 
-def initialize_data_loader(res,w,scale,batch_size,workers,root,aug = False) -> Tuple[DataLoader, DataLoader, DataLoader]:
+def initialize_data_loader(res,w,scale,batch_size,workers,root,aug) -> Tuple[DataLoader, DataLoader, DataLoader]:
 
     
     train = os.path.join(root,"data/train.csv")
@@ -18,19 +18,31 @@ def initialize_data_loader(res,w,scale,batch_size,workers,root,aug = False) -> T
 
     normalize = T.Normalize(mean=[0.2006],
                                      std=[0.2622])
-
-    augmentation = T.Compose([normalize,T.RandomHorizontalFlip(), T.RandomVerticalFlip(),T.RandomRotation(degrees=25),
-                        T.RandomAffine(degrees=0, scale=(0.8, 0.99)),T.RandomResizedCrop(size=(1152,896),scale=(0.8,0.99)),
-                        MyIntensityShift(shift= [80,120]), T.RandomAffine(degrees=0, shear=12)])
     
-    red_aug = T.Compose([normalize,T.RandomHorizontalFlip(), T.RandomVerticalFlip(),T.RandomRotation(degrees=25)])
+    if aug is None:
+        augmentation = normalize
 
+    elif aug == 'BIG':
+        augmentation = T.Compose([normalize,T.RandomHorizontalFlip(), T.RandomVerticalFlip(),T.RandomRotation(degrees=25),
+                            T.RandomAffine(degrees=0, scale=(0.8, 0.99)),T.RandomResizedCrop(size=res,scale=(0.8,0.99)),
+                            MyIntensityShift(shift= [80,120]), T.RandomAffine(degrees=0, shear=12)])
+        
 
-    if aug:
-        train_dataset= CBIS_MAMMOGRAM(train,res,w,scale, transform = augmentation)
+    elif aug == 'MEDIUM':
+        augmentation = T.Compose([normalize,T.RandomHorizontalFlip(), T.RandomVerticalFlip(),T.RandomRotation(degrees=25),
+                            T.RandomResizedCrop(size=res,scale=(0.8,0.99)),
+                            MyIntensityShift(shift= [80,120])])
+
     
-    else: 
-        train_dataset = CBIS_MAMMOGRAM(train,res,w,scale, transform = normalize)
+    elif aug == "SMALL": 
+        augmentation = T.Compose([normalize,T.RandomHorizontalFlip(), T.RandomVerticalFlip(),T.RandomRotation(degrees=25)])
+
+
+
+    else:
+        raise ValueError("Bad aug type")
+
+    train_dataset = CBIS_MAMMOGRAM(train,res,w,scale, transform = augmentation)
     #Normalizing the validation set
     validation_dataset = CBIS_MAMMOGRAM(validation,res,w,scale, transform = normalize)
     #Normalizing the test set
