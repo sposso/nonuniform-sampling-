@@ -2,7 +2,7 @@
 
 #NUMBER OF AGENTS TO REGISTER AS WANDB AGENTS
 #SHOULD BE -array=1-X, where X is number of estimated runs
-#SBATCH --array=1-4    #e.g. 1-4 will create agents labeled 1,2,3,4
+#SBATCH --array=1-48    #e.g. 1-4 will create agents labeled 1,2,3,4
 
 #Below is configuration PER AGENT
 
@@ -12,13 +12,13 @@
 #SBATCH --ntasks-per-node=2
 #SBATCH --nodes=1
 
-#SBATCH -t 0-06:00:00			#Time Limit d-hh:mm:ss
-#SBATCH --partition=V4V32_SKY32M192_L		#partition/queue CAC48M192_L
+#SBATCH -t 1-00:00:00			#Time Limit d-hh:mm:ss
+#SBATCH --partition=V4V32_CAS40M192_L		#partition/queue CAC48M192_L
 #SBATCH --account=gcl_lsa273_uksr	#project allocation accout 
 
 #SBATCH --job-name=sweep		#Name of the job
-#SBATCH  --output=sweep.out		#Output file name
-#SBATCH  --error=sweep.err		#Error file name
+#SBATCH  --output=./logs/R-%x-%j-%a.out.out		#Output file name
+#SBATCH  --error=./logs/R-%x-%j-%a.out.err		#Error file name
 
 #SBATCH --mail-type ALL                 #Send email on start/end
 #SBATCH --mail-user ofsk222@uky.edu     #Where to send email

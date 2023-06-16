@@ -1,6 +1,6 @@
 program: main.py
 project: breastcancer
-name: parameter_sweep 
+name: low_resolution 
 run_cap: 16
 
 method: bayes
@@ -11,7 +11,12 @@ metric:
 parameters:
   # ADJUSTABLE PARAMETERS
   res:
-    values: [0,1,2,3]
+    values: [0,1]
   sigma:
-    min: 7
-    max: 28
+    values: [15, 21, 28]
+  exas:
+    values: [4,5,6,7]
+  aug:
+    values: ["MEDIUM", "SMALL"]
+  batch_size:
+    value: 20
