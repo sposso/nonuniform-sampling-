@@ -141,11 +141,12 @@ class FullClassifier(pl.LightningModule):
         x, y = batch 
         y = y.to(torch.float)
 
-        heatmaps = prob_heatmap_tensor(x, self.patch_classifier)
-        sampled_imgs = warped_imgs(x,heatmaps, self.res, self.sigma)
+        
+        #heatmaps = prob_heatmap_tensor(x, self.patch_classifier)
+        #sampled_imgs = warped_imgs(x,heatmaps, self.res, self.sigma)
 
-        inputs= sampled_imgs.expand(-1,3,*sampled_imgs.shape[2:])
-        inputs= sampled_imgs.expand(-1,3,*sampled_imgs.shape[2:])
+        inputs= x.expand(-1,3,*x.shape[2:])
+        #inputs= sampled_imgs.expand(-1,3,*sampled_imgs.shape[2:])
         
         # compute loss
         preds = self.backbone(inputs).squeeze()
@@ -159,11 +160,11 @@ class FullClassifier(pl.LightningModule):
         x, y = batch 
         y = y.to(torch.float)
 
-        heatmaps = prob_heatmap_tensor(x, self.patch_classifier)
-        sampled_imgs = warped_imgs(x,heatmaps, self.res, self.sigma)
+        #heatmaps = prob_heatmap_tensor(x, self.patch_classifier)
+        #sampled_imgs = warped_imgs(x,heatmaps, self.res, self.sigma)
 
-        inputs= sampled_imgs.expand(-1,3,*sampled_imgs.shape[2:])
-        inputs= sampled_imgs.expand(-1,3,*sampled_imgs.shape[2:])
+        #inputs= sampled_imgs.expand(-1,3,*sampled_imgs.shape[2:])
+        inputs= x.expand(-1,3,*x.shape[2:])
 
         # compute loss
         preds = self.forward(inputs).squeeze() 

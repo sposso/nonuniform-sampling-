@@ -7,7 +7,7 @@ import numpy as np
 from PIL import Image
 import cv2
 import random
-
+from utils.deformation import get_resampled_images
 
 class MyIntensityShift:
     """Intensity shift ± 20 %."""
@@ -83,29 +83,41 @@ def pil_loader(path: str) :
         return img
 
 
+
+    
 class CBIS_MAMMOGRAM(Dataset):
-    def __init__(self, csv_file, transform=None):
-        print(csv_file)
+    def __init__(self,csv_file,res,w,scale,transform=None):
+        
         self.annotations = pd.read_csv(csv_file)
         self.transform = transform
+        self.res = res
+        self.w= w
+        self.scale = scale
 
     def __len__(self):
         return len(self.annotations)
 
     def __getitem__(self, index):
+
         img_path = self.annotations.iloc[index,0]
         extension = img_path.split(".")[-1]
         if extension =='png':
 
-            image = pil_loader(img_path)*(1/65535)
-            image = segment_breast(image)
+            image = torch.tensor(pil_loader(img_path)*(1/65535))
+            #image = segment_breast(image)
         elif extension =='npy':
-            image = np.float32(np.load(img_path)*(1/65535))
-            image = segment_breast(image)
-            
-        y_label = torch.tensor(int(self.annotations.iloc[index,1]))
-
+            image = torch.tensor(np.float32(np.load(img_path)*(1/65535)))
+            #image = segment_breast(image)
+        
+        heat_path = self.annotations.iloc[index,2]
+        heat = torch.tensor(np.load(heat_path))
+        
+        image= get_resampled_images(image,heat,self.res,self.w,self.scale)
+        image = image.squeeze(dim=0)
+        y_label = torch.tensor(int(self.annotations.iloc[index,3]))
         if self.transform is not None:
             image = self.transform(image)
+            
+            
 
-        return image, y_label
+        return image,y_label

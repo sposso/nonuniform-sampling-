@@ -8,3 +8,5 @@ lightning_logs/*
 .ipynb_checkpoints
 *.err
 *.out
+wandb/*
+checkpoints*/

@@ -78,10 +78,56 @@ def makeGaussian(size, fwhm = 3, center=None):
     return np.exp(-4*np.log(2) * ((x-x0)**2 + (y-y0)**2) / fwhm**2)
 
 
-def warped_imgs(img,heat,res,fwhm):
+def uniform_grids_1d(grid_size, padding_size):
+    """
+    generate the uniform coords along two dimensions, respectively.
+    """
+    global_size = grid_size + 2 * padding_size
+    uniform_x = np.zeros((1, global_size))
+    uniform_y = np.zeros((global_size, 1))
+
+    for i in range(global_size):
+        uniform_x[0, i] = (i - padding_size)/(grid_size - 1.0)
+        uniform_y[i, 0] = (i - padding_size)/(grid_size - 1.0)
+
+    return uniform_x, uniform_y
+
+def Gaussian_1d(size, fwhm):
+    """ Make a 1d gaussian kernel.
+    size is the length of the kernel, fwhm is the effective radius.
+    Return: a gaussian matrix of shape: [1, size]
+    """
+    x = np.arange(0, size, 1, float)
+    x0 = size // 2
+    return np.exp(-4*np.log(2) * ((x-x0)**2) / fwhm**2)
+
+def gauss_conv_1d(_input,fwhm, axis, padding_size = 30):
+    """
+    1d convolution with gaussian kernel.
+    """
+    gauss_size = 2 * padding_size + 1
+
+    if axis == 'x':
+        gaussian_weights = torch.reshape(torch.tensor(
+            Gaussian_1d(gauss_size,fwhm), dtype = torch.float32), (1, gauss_size)) # (1, 61)
+        filter = nn.Conv2d(1,1, kernel_size=(1,2*padding_size+1),bias=False)
+    elif axis == 'y':
+        gaussian_weights = torch.reshape(torch.tensor(
+            Gaussian_1d(gauss_size,fwhm), dtype = torch.float), ( gauss_size,1)) # (61, 1)
+
+        filter = nn.Conv2d(1,1, kernel_size=(2*padding_size+1,1),bias=False)
+   
+    #customize convolution kernel weights 
+    filter.weight[0].data[0,:,:] = gaussian_weights
+
+    return filter(_input)
+
+
+def warped_imgs(img,heat,res,fwhm,scale):
     
     img = img.type(torch.float32)
-    heat = heat.unsqueeze(dim=1)
+    img = img.unsqueeze(dim=0).unsqueeze(dim=0)
+    heat = heat.unsqueeze(dim=0).unsqueeze(dim=0)
     heat = heat.type(torch.float32)
     n = heat.size(0)
     c = heat.size(1)
@@ -91,7 +137,6 @@ def warped_imgs(img,heat,res,fwhm):
     f = heat.reshape(n, c, -1)
     norm = nn.Softmax(dim=2)
     # *3 to obtain an appropriate scale for the input of softmax function.
-    scale=8
     f_norm = norm(f * scale)
     x = f_norm.view(n,c,h,w)
     
@@ -117,7 +162,7 @@ def warped_imgs(img,heat,res,fwhm):
 
     x = nn.Upsample(size=(grid_size[0],grid_size[1]), mode='bilinear')(x)
     
-    x = x #.to(device = device)
+    #x = x #.to(device = device)
     #x = x.view(-1,grid_size[0]*grid_size[1])
     #x = nn.Softmax()(x)*7
     #x = x.view(-1,1,grid_size[0],grid_size[1])
@@ -149,10 +194,91 @@ def warped_imgs(img,heat,res,fwhm):
     grid = torch.transpose(grid,1,2)
     grid = torch.transpose(grid,2,3)
     
-    grid = grid.cuda()
+    grid = grid.to(img.device)
 
     x_sampled = F.grid_sample(img, grid, align_corners = False)
 
     #img.detach()
     
-    return x_sampled #.cpu().detach()
+    return x_sampled,grid #.cpu().detach()
+
+def warped_str(img,heat,input_size_net,fwhm,scale):
+    
+    img = img.type(torch.float32)
+    img = img.unsqueeze(dim=0).unsqueeze(dim=0)
+    heat = heat.unsqueeze(dim=0).unsqueeze(dim=0)
+    heat = heat.type(torch.float32)
+    heat = nn.Upsample(size=(112,112))(heat)
+    n = heat.size(0)
+    c = heat.size(1)
+    h = heat.size(2)
+    w = heat.size(3)
+    
+    f = heat.reshape(n, c, -1)
+    norm = nn.Softmax(dim=2)
+    # *3 to obtain an appropriate scale for the input of softmax function.
+    f_norm = norm(f * scale)
+    x = f_norm.view(n,c,h,w)
+
+    
+    grid_size = 112
+    padding_size = 30
+    
+    saliency = nn.ReplicationPad2d(padding_size)(x)
+    
+    global_size = grid_size + 2 * padding_size
+    dst_x, dst_y = uniform_grids_1d(grid_size, padding_size)
+    
+    dst_x = torch.FloatTensor(dst_x[None,None:,:])
+    uniform_x = dst_x.expand(n,-1,-1,-1)
+    dst_y = torch.FloatTensor(dst_y[None,None:,:]) 
+    uniform_y = dst_y.expand(n,-1,-1,-1)
+
+    saliency_x,_= torch.max(saliency, axis = 2, keepdims = True) # ( 1,1, 1, 91)
+    denominator_x = gauss_conv_1d(saliency_x,fwhm, axis = 'x') # (1,1,1,31)
+    numerator_x = gauss_conv_1d(saliency_x * uniform_x,fwhm, axis = 'x') #(1,1,1,31)
+    src_xgrids = numerator_x/denominator_x # (1, 1,1, 31)
+    
+    saliency_y,_ = torch.max(saliency, axis = 3, keepdims = True) # (1, 1, 91, 1)
+    denominator_y = gauss_conv_1d(saliency_y,fwhm, axis = 'y') # (1, 1, 31, 1)
+    numerator_y = gauss_conv_1d(saliency_y * uniform_y,fwhm, axis = 'y')
+    src_ygrids = numerator_y/denominator_y  # (1, 1, 31, 1)
+    
+    xgrids = src_xgrids*2-1
+    xgrids = torch.clamp(xgrids,min=-1,max=1)
+    xgrids = xgrids.expand(-1,-1,xgrids.shape[3],-1)
+
+    ygrids = src_ygrids*2-1
+    ygrids = torch.clamp(ygrids, min = -1, max = 1)
+    ygrids = ygrids.expand(-1,-1,-1,ygrids.shape[2],)
+
+    xgrids = xgrids.view(-1,1,grid_size,grid_size)
+    ygrids = ygrids.view(-1,1,grid_size,grid_size)
+
+    grid = torch.cat((xgrids,ygrids),1)
+
+    grid = nn.Upsample(size=(input_size_net[0],input_size_net[1]), mode='bilinear')(grid)
+
+    grid = torch.transpose(grid,1,2)
+    grid = torch.transpose(grid,2,3)
+    
+    x_sampled = F.grid_sample(img, grid, align_corners = False)
+    
+    return x_sampled.detach(), grid.detach()
+
+def get_resampled_images(img,heat,res,fwhm,scale):
+    
+    lamda = 0.5
+    
+    img = img.type(torch.float32)
+    
+    s_x,structured_grid = warped_str(img,heat,res,fwhm,scale)
+        
+    p_x,pixel_grid = warped_imgs(img,heat,res,fwhm,scale)
+
+    
+    img =img.unsqueeze(0).unsqueeze(0)
+    src_grid = (1.0 - lamda) * structured_grid + lamda * pixel_grid
+    x_sampled = F.grid_sample(img, src_grid, align_corners = False)
+    
+    return x_sampled.detach()

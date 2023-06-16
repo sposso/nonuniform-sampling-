@@ -8,7 +8,7 @@ from  torch import  nn
 from torch import optim
 
 
-def initialize_data_loader(batch_size,workers,root,aug = False) -> Tuple[DataLoader, DataLoader, DataLoader]:
+def initialize_data_loader(res,w,scale,batch_size,workers,root,aug = False) -> Tuple[DataLoader, DataLoader, DataLoader]:
 
     
     train = os.path.join(root,"data/train.csv")
@@ -19,20 +19,22 @@ def initialize_data_loader(batch_size,workers,root,aug = False) -> Tuple[DataLoa
     normalize = T.Normalize(mean=[0.2006],
                                      std=[0.2622])
 
-    augmentation = T.Compose([T.ToTensor(),normalize,T.RandomHorizontalFlip(), T.RandomVerticalFlip(),T.RandomRotation(degrees=25),
+    augmentation = T.Compose([normalize,T.RandomHorizontalFlip(), T.RandomVerticalFlip(),T.RandomRotation(degrees=25),
                         T.RandomAffine(degrees=0, scale=(0.8, 0.99)),T.RandomResizedCrop(size=(1152,896),scale=(0.8,0.99)),
                         MyIntensityShift(shift= [80,120]), T.RandomAffine(degrees=0, shear=12)])
+    
+    red_aug = T.Compose([normalize,T.RandomHorizontalFlip(), T.RandomVerticalFlip(),T.RandomRotation(degrees=25)])
 
 
     if aug:
-        train_dataset= CBIS_MAMMOGRAM(train, transform = augmentation)
+        train_dataset= CBIS_MAMMOGRAM(train,res,w,scale, transform = augmentation)
     
     else: 
-        train_dataset = CBIS_MAMMOGRAM(train, transform = T.Compose([T.ToTensor(),normalize]))
+        train_dataset = CBIS_MAMMOGRAM(train,res,w,scale, transform = normalize)
     #Normalizing the validation set
-    validation_dataset = CBIS_MAMMOGRAM(validation, transform = T.Compose([T.ToTensor(),normalize]))
+    validation_dataset = CBIS_MAMMOGRAM(validation,res,w,scale, transform = normalize)
     #Normalizing the test set
-    test_dataset = CBIS_MAMMOGRAM(test, transform = T.Compose([T.ToTensor(),normalize]))
+    test_dataset = CBIS_MAMMOGRAM(test,res,w,scale, transform = normalize)
 
      # Restricts data loading to a subset of the dataset exclusive to the current process
     weights = torch.load(os.path.join(root,"data/sampler_weight.pt"))

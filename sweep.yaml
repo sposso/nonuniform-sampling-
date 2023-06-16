@@ -1,0 +1,17 @@
+program: main.py
+project: breastcancer
+name: parameter_sweep 
+run_cap: 16
+
+method: bayes
+metric:
+  name: validation_accuracy
+  goal: maximize
+
+parameters:
+  # ADJUSTABLE PARAMETERS
+  res:
+    values: [0,1,2,3]
+  sigma:
+    min: 7
+    max: 28
