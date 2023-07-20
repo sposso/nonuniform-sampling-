@@ -86,13 +86,14 @@ def pil_loader(path: str) :
 
     
 class CBIS_MAMMOGRAM(Dataset):
-    def __init__(self,csv_file,res,w,scale,transform=None):
+    def __init__(self,csv_file,res,w,scale,lambd,transform=None):
         
         self.annotations = pd.read_csv(csv_file)
         self.transform = transform
         self.res = res
         self.w= w
         self.scale = scale
+        self.lambd = lambd
 
     def __len__(self):
         return len(self.annotations)
@@ -112,7 +113,7 @@ class CBIS_MAMMOGRAM(Dataset):
         heat_path = self.annotations.iloc[index,2]
         heat = torch.tensor(np.load(heat_path))
         
-        image= get_resampled_images(image,heat,self.res,self.w,self.scale)
+        image= get_resampled_images(image,heat,self.res,self.w,self.scale,self.lambd)
         image = image.squeeze(dim=0)
         y_label = torch.tensor(int(self.annotations.iloc[index,3]))
         if self.transform is not None:

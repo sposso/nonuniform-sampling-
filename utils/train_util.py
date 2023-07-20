@@ -8,7 +8,7 @@ from  torch import  nn
 from torch import optim
 
 
-def initialize_data_loader(res,w,scale,batch_size,workers,root,aug) -> Tuple[DataLoader, DataLoader, DataLoader]:
+def initialize_data_loader(res,w,scale,batch_size,workers,root,aug,lambd) -> Tuple[DataLoader, DataLoader, DataLoader]:
 
     
     train = os.path.join(root,"data/train.csv")
@@ -42,11 +42,11 @@ def initialize_data_loader(res,w,scale,batch_size,workers,root,aug) -> Tuple[Dat
     else:
         raise ValueError("Bad aug type")
 
-    train_dataset = CBIS_MAMMOGRAM(train,res,w,scale, transform = augmentation)
+    train_dataset = CBIS_MAMMOGRAM(train,res,w,scale,lambd, transform = augmentation)
     #Normalizing the validation set
-    validation_dataset = CBIS_MAMMOGRAM(validation,res,w,scale, transform = normalize)
+    validation_dataset = CBIS_MAMMOGRAM(validation,res,w,scale,lambd, transform = normalize)
     #Normalizing the test set
-    test_dataset = CBIS_MAMMOGRAM(test,res,w,scale, transform = normalize)
+    test_dataset = CBIS_MAMMOGRAM(test,res,w,scale,lambd, transform = normalize)
 
      # Restricts data loading to a subset of the dataset exclusive to the current process
     weights = torch.load(os.path.join(root,"data/sampler_weight.pt"))

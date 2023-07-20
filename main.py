@@ -33,6 +33,7 @@ def parse_args():
     parser.add_argument('--experiment_name', type=str, default="classifier")
     parser.add_argument('--seed', type=int, default=1)
     parser.add_argument('--nodes', type=int, default=1)
+    parser.add_argument('--lambd', type= float, default = 0.5)
 
     return parser.parse_args()
 
@@ -52,7 +53,7 @@ def main():
     #Initilialize data
     print(args.data_localization)  
     split_dataset(args.data_localization)
-    train_loader,val_loader, test_loader = initialize_data_loader(res,args.sigma,args.exa,args.batch_size,args.workers,args.project_root,args.aug)
+    train_loader,val_loader, test_loader = initialize_data_loader(res,args.sigma,args.exa,args.batch_size,args.workers,args.project_root,args.aug,args.lambd)
 
     #setup entire model
     model = FullClassifier(args, res=res)

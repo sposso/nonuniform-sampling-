@@ -266,9 +266,9 @@ def warped_str(img,heat,input_size_net,fwhm,scale):
     
     return x_sampled.detach(), grid.detach()
 
-def get_resampled_images(img,heat,res,fwhm,scale):
+def get_resampled_images(img,heat,res,fwhm,scale,lambd):
     
-    lamda = 0.5
+    lamda = lambd
     
     img = img.type(torch.float32)
     

@@ -1,9 +1,15 @@
 program: main.py
 project: breastcancer
-name: low_resolution 
+name: high_resolution_redu_aug 
 run_cap: 16
 
-method: bayes
+command:
+  - ${env}
+  - python3
+  - ${program}
+  - ${args}
+  
+method: grid
 metric:
   name: validation_accuracy
   goal: maximize
@@ -11,12 +17,12 @@ metric:
 parameters:
   # ADJUSTABLE PARAMETERS
   res:
-    values: [0,1]
+    values: [2,3]
   sigma:
-    values: [15, 21, 28]
-  exas:
-    values: [4,5,6,7]
+    values: [ 21, 28]
+  exa:
+    value: 1
   aug:
-    values: ["MEDIUM", "SMALL"]
+    values: ["SMALL", "MEDIUM"]
   batch_size:
-    value: 20
+    value: 10
